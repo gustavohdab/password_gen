@@ -56,9 +56,6 @@ fn main() {
     set_clipboard(formats::Unicode, &password).unwrap();
     let timestamp = Local::now().to_string();
     history.add_password(timestamp.clone(), password.clone());
-
-    // Salva o histórico de senhas em um arquivo
-    history.save_history(&timestamp, &password);
 }
 
 /// Pede ao usuário o comprimento da senha desejada
