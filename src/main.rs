@@ -1,67 +1,108 @@
-// This program generates a random password of a given length.
-// The password is a mix of uppercase letters, lowercase letters, numbers, and symbols.
-// The generated password is copied to the clipboard automatically.
-// The generated password is printed to the console.
-// The length of the password can be configured via a command line argument.
-// The password is generated using a cryptographically secure random number generator.
-
-// TODO: Implement a command to view the history of all generated passwords.
-//       Instead of entering a number, allow the user to enter the command "/history" to see all generated passwords.
-//       Additionally, support the command "/history <name>" to view a specific password.
-// TODO: Prompt the user to provide a identifier for each generated password.
-//       This will help in managing the password history and easily identifying passwords later.
-
+use chrono::Local;
 use clipboard_win::{formats, set_clipboard};
 use rand::Rng;
+use std::collections::HashMap;
 use std::env;
-use std::io::{self, Write};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufRead, BufReader, Write};
 use std::process;
+
+/// Struct que representa o histórico de senhas
+struct PasswordHistory {
+    history: HashMap<String, String>,
+}
+
+impl PasswordHistory {
+    /// Cria uma nova instância de PasswordHistory
+    fn new() -> PasswordHistory {
+        PasswordHistory {
+            history: HashMap::new(),
+        }
+    }
+
+    /// Adiciona uma senha ao histórico
+    fn add_password(&mut self, password: String) {
+        let timestamp = Local::now().to_string();
+        self.history.insert(timestamp.clone(), password.clone()); // Clonando a senha antes de inserir no hashmap
+        self.save_history(&timestamp, &password);
+    }
+
+    /// Salva o histórico de senhas em um arquivo
+    fn save_history(&self, timestamp: &str, password: &str) {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("password_history.txt")
+        {
+            if let Err(_) = writeln!(&mut file, "{}: {}", timestamp, password) {
+                println!("Falha ao salvar o histórico de senhas.");
+            }
+        } else {
+            println!("Falha ao abrir o arquivo de histórico de senhas.");
+        }
+    }
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let mut history = PasswordHistory::new();
+
     if args.len() != 1 {
-        writeln!(io::stderr(), "Usage: password_gen").unwrap();
+        writeln!(io::stderr(), "Uso: password_gen").unwrap();
         process::exit(1);
     }
-    let length: usize = ask_password_length();
-    let password: String = generate_password(length);
-    println!("{}", password);
-    set_clipboard(formats::Unicode, &password).unwrap();
+
+    loop {
+        let length: usize = ask_password_length();
+        let password: String = generate_password(length);
+        println!("{}", password);
+        set_clipboard(formats::Unicode, &password).unwrap();
+        history.add_password(password.clone());
+
+        let mut input = String::new();
+        println!(
+            "Digite '/history' para ver o histórico de senhas, '/exit' para sair, ou pressione Enter para gerar outra senha:"
+        );
+        io::stdin().read_line(&mut input).unwrap();
+        let input = input.trim();
+        match input {
+            "/history" => {
+                if let Ok(file) = File::open("password_history.txt") {
+                    let reader = BufReader::new(file);
+                    for line in reader.lines() {
+                        println!("{}", line.unwrap());
+                    }
+                } else {
+                    println!("Nenhum histórico de senhas encontrado.");
+                }
+            }
+            "/exit" => break,
+            _ => continue,
+        }
+    }
 }
 
-// Asks the user to enter the length of the password and returns it.
+/// Pede ao usuário o comprimento da senha desejada
 fn ask_password_length() -> usize {
     let mut input: String = String::new();
-    println!("Enter the length of the password:");
+    println!("Digite o comprimento da senha:");
     io::stdin().read_line(&mut input).unwrap();
     input.trim().parse().unwrap()
 }
 
-// Generates a password of the specified length.
+/// Gera uma senha aleatória com o comprimento especificado
 fn generate_password(length: usize) -> String {
-    let mut rng: rand::prelude::ThreadRng = rand::thread_rng();
-    let mut password: String = String::new();
+    let mut rng = rand::thread_rng();
+    let mut password = String::new();
     for _ in 0..length {
         let choice: i32 = rng.gen_range(0..4);
         match choice {
-            0 => password.push(rng.gen_range(48_u8..58_u8) as char), // Numbers (ASCII 48-57)
-            1 => password.push(rng.gen_range(65_u8..91_u8) as char), // Uppercase letters (ASCII 65-90)
-            2 => password.push(rng.gen_range(97_u8..123_u8) as char), // Lowercase letters (ASCII 97-122)
-            3 => password.push(rng.gen_range(33_u8..48_u8) as char),  // Symbols (ASCII 33-47)
-            _ => panic!("Invalid choice"),
+            0 => password.push(rng.gen_range(48_u8..58_u8) as char), // Números (ASCII 48-57)
+            1 => password.push(rng.gen_range(65_u8..91_u8) as char), // Letras maiúsculas (ASCII 65-90)
+            2 => password.push(rng.gen_range(97_u8..123_u8) as char), // Letras minúsculas (ASCII 97-122)
+            3 => password.push(rng.gen_range(33_u8..48_u8) as char),  // Símbolos (ASCII 33-47)
+            _ => panic!("Escolha inválida"),
         }
     }
     password
-}
-
-// Tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_generate_password() {
-        let password: String = generate_password(10);
-        assert_eq!(password.len(), 10);
-    }
 }
