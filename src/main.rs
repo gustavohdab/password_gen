@@ -3,8 +3,8 @@ use clipboard_win::{formats, set_clipboard};
 use rand::Rng;
 use std::collections::HashMap;
 use std::env;
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Write};
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::process;
 
 /// Struct que representa o histórico de senhas
@@ -21,8 +21,7 @@ impl PasswordHistory {
     }
 
     /// Adiciona uma senha ao histórico
-    fn add_password(&mut self, password: String) {
-        let timestamp = Local::now().to_string();
+    fn add_password(&mut self, timestamp: String, password: String) {
         self.history.insert(timestamp.clone(), password.clone()); // Clonando a senha antes de inserir no hashmap
         self.save_history(&timestamp, &password);
     }
@@ -52,34 +51,14 @@ fn main() {
         process::exit(1);
     }
 
-    loop {
-        let length: usize = ask_password_length();
-        let password: String = generate_password(length);
-        println!("{}", password);
-        set_clipboard(formats::Unicode, &password).unwrap();
-        history.add_password(password.clone());
+    let length: usize = ask_password_length();
+    let password: String = generate_password(length);
+    set_clipboard(formats::Unicode, &password).unwrap();
+    let timestamp = Local::now().to_string();
+    history.add_password(timestamp.clone(), password.clone());
 
-        let mut input = String::new();
-        println!(
-            "Digite '/history' para ver o histórico de senhas, '/exit' para sair, ou pressione Enter para gerar outra senha:"
-        );
-        io::stdin().read_line(&mut input).unwrap();
-        let input = input.trim();
-        match input {
-            "/history" => {
-                if let Ok(file) = File::open("password_history.txt") {
-                    let reader = BufReader::new(file);
-                    for line in reader.lines() {
-                        println!("{}", line.unwrap());
-                    }
-                } else {
-                    println!("Nenhum histórico de senhas encontrado.");
-                }
-            }
-            "/exit" => break,
-            _ => continue,
-        }
-    }
+    // Salva o histórico de senhas em um arquivo
+    history.save_history(&timestamp, &password);
 }
 
 /// Pede ao usuário o comprimento da senha desejada
